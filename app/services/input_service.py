@@ -3,7 +3,6 @@
 Uses pynput when an X display is available, falls back to xdotool via subprocess.
 """
 
-import os
 import subprocess
 import logging
 
