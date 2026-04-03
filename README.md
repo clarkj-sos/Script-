@@ -126,3 +126,7 @@ Add to your `claude_desktop_config.json`:
 
 **"What are people saying about my latest upload?"**
 → Claude calls `youtube_list_comments`
+
+## File Manager — Copy & Download
+
+Both the **Copy** and **Download** buttons share the same `buildPackageText()` helper so the content is always identical between copy and download. `buildPackageText(entry)` builds a plain-text summary (name, path, size, modified date) for a file entry; the Copy button writes it to the clipboard and the Download button saves it as a `.txt` file.

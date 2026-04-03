@@ -9,6 +9,20 @@
 
     let currentPath = "";
 
+    /**
+     * Build a plain-text summary for a file entry.
+     * Both the Copy and Download buttons call this so the content is
+     * always identical regardless of which button the user clicks.
+     */
+    function buildPackageText(entry) {
+        var lines = [];
+        lines.push("Name: " + entry.name);
+        lines.push("Path: " + entry.path);
+        lines.push("Size: " + formatSize(entry.size));
+        lines.push("Modified: " + formatDate(entry.modified));
+        return lines.join("\n");
+    }
+
     function formatSize(bytes) {
         if (bytes === null || bytes === undefined) return "-";
         const units = ["B", "KB", "MB", "GB", "TB"];
@@ -73,10 +87,28 @@
             tdActions.className = "file-actions";
 
             if (!entry.is_dir) {
+                const copyBtn = document.createElement("button");
+                copyBtn.textContent = "Copy";
+                copyBtn.addEventListener("click", function () {
+                    var text = buildPackageText(entry);
+                    navigator.clipboard.writeText(text).then(function () {
+                        copyBtn.textContent = "Copied!";
+                        setTimeout(function () { copyBtn.textContent = "Copy"; }, 1500);
+                    });
+                });
+                tdActions.appendChild(copyBtn);
+
                 const dlBtn = document.createElement("button");
                 dlBtn.textContent = "Download";
                 dlBtn.addEventListener("click", function () {
-                    window.location.href = "/api/files/download?path=" + encodeURIComponent(entry.path);
+                    var text = buildPackageText(entry);
+                    var blob = new Blob([text], { type: "text/plain" });
+                    var url = URL.createObjectURL(blob);
+                    var a = document.createElement("a");
+                    a.href = url;
+                    a.download = entry.name + ".txt";
+                    a.click();
+                    URL.revokeObjectURL(url);
                 });
                 tdActions.appendChild(dlBtn);
             }
