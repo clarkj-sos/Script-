@@ -4,6 +4,7 @@
 import os
 import secrets
 import ssl
+import sys
 
 from config import Config
 from cryptography import x509
@@ -69,7 +70,7 @@ def main():
 
     app = create_app()
 
-    print("\n[+] Remote Desktop Control Server")
+    print(f"\n[+] Remote Desktop Control Server")
     print(f"[+] URL: https://{Config.HOST}:{Config.PORT}")
     print(f"[+] Password: {Config.PASSWORD}")
     print(f"[+] Screen FPS: {Config.SCREEN_FPS}")
