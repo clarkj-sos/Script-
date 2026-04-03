@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Files - RDC{% endblock %}
+
+{% block content %}
+<div class="files-container">
+    <div class="files-toolbar">
+        <button id="btn-up" title="Go up">&uarr; Up</button>
+        <input type="text" id="path-input" placeholder="Path..." value="">
+        <button id="btn-go">Go</button>
+    </div>
+    <div class="files-upload">
+        <div id="drop-zone" class="drop-zone">
+            Drag &amp; drop files here or
+            <input type="file" id="file-input" multiple>
+            <button id="btn-upload">Upload</button>
+        </div>
+    </div>
+    <table class="file-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Size</th>
+                <th>Modified</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="file-list"></tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/files.js"></script>
+{% endblock %}
