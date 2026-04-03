@@ -39,6 +39,7 @@ def socket_login_required(f):
     """Decorator to require authentication for a SocketIO event."""
     @functools.wraps(f)
     def wrapped(*args, **kwargs):
+        from flask import request as flask_request
         from flask_socketio import disconnect
         if not session.get("logged_in"):
             disconnect()
