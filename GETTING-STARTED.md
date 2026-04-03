@@ -22,7 +22,7 @@ A step-by-step guide to setting up and using the YouTube MCP Server to manage yo
 
 ## What You'll Need
 
-- **Node.js** (v18 or later) and **npm**
+- **Python 3.9+** and **pip**
 - A **Google account** with a YouTube channel
 - **Claude Desktop**, **Claude Code**, or another MCP-compatible client
 - Basic comfort with the terminal
@@ -89,11 +89,12 @@ Use the [Google OAuth Playground](https://developers.google.com/oauthplayground/
 git clone https://github.com/clarkj-sos/Script-.git
 cd Script-
 
-# Install dependencies
-npm install
+# Create a virtual environment (recommended)
+python3 -m venv venv
+source venv/bin/activate   # On Windows: venv\Scripts\activate
 
-# Build the TypeScript server
-npm run build
+# Install dependencies
+pip install -r requirements.txt
 ```
 
 ---
@@ -131,8 +132,8 @@ Add the server to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "youtube": {
-      "command": "node",
-      "args": ["/absolute/path/to/Script-/dist/index.js"],
+      "command": "python3",
+      "args": ["/absolute/path/to/Script-/server.py"],
       "env": {
         "YOUTUBE_API_KEY": "your-api-key",
         "YOUTUBE_CLIENT_ID": "your-client-id",
@@ -151,7 +152,7 @@ Restart Claude Desktop after saving.
 Add the MCP server via the CLI:
 
 ```bash
-claude mcp add youtube -- node /absolute/path/to/Script-/dist/index.js
+claude mcp add youtube -- python3 /absolute/path/to/Script-/server.py
 ```
 
 Then set the environment variables in your shell before launching Claude Code.
@@ -159,8 +160,8 @@ Then set the environment variables in your shell before launching Claude Code.
 ### Option C: HTTP Transport (Remote Access)
 
 ```bash
-TRANSPORT=http PORT=3000 npm start
-# Server runs at http://localhost:3000/mcp
+TRANSPORT=http RDC_PORT=3000 python3 server.py
+# Server runs at https://0.0.0.0:3000
 ```
 
 ---
@@ -260,8 +261,8 @@ You've hit the 10,000 unit daily limit. Wait until midnight Pacific Time for the
 - If using OAuth, confirm your account is listed as a test user in the OAuth consent screen
 
 ### Server won't start
-- Ensure Node.js v18+ is installed: `node --version`
-- Run `npm install` and `npm run build` again
+- Ensure Python 3.9+ is installed: `python3 --version`
+- Run `pip install -r requirements.txt` again
 - Check that all required environment variables are set
 
 ### Claude doesn't see the YouTube tools
