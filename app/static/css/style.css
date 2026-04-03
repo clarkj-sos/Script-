@@ -1,0 +1,290 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    min-height: 100vh;
+}
+
+/* Navbar */
+.navbar {
+    display: flex;
+    align-items: center;
+    background: #16213e;
+    padding: 0 1rem;
+    height: 48px;
+    border-bottom: 1px solid #0f3460;
+}
+
+.nav-brand {
+    font-weight: bold;
+    font-size: 1.2rem;
+    color: #e94560;
+    margin-right: 2rem;
+}
+
+.nav-links {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.nav-link {
+    color: #a0a0b0;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    transition: background 0.2s, color 0.2s;
+}
+
+.nav-link:hover, .nav-link.active {
+    color: #fff;
+    background: #0f3460;
+}
+
+/* Content */
+.content {
+    height: calc(100vh - 48px);
+    overflow: hidden;
+}
+
+/* Login */
+.login-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-container {
+    background: #16213e;
+    padding: 2rem;
+    border-radius: 8px;
+    text-align: center;
+    width: 360px;
+}
+
+.login-container h1 {
+    margin-bottom: 1.5rem;
+    color: #e94560;
+    font-size: 1.4rem;
+}
+
+.login-container input {
+    width: 100%;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-size: 1rem;
+}
+
+.login-container button {
+    width: 100%;
+    padding: 0.75rem;
+    background: #e94560;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.login-container button:hover {
+    background: #c73e54;
+}
+
+.error {
+    background: #5c1a1a;
+    color: #ff6b6b;
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+/* Status */
+.status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+.status.connected {
+    background: #1b4332;
+    color: #52b788;
+}
+
+.status.disconnected {
+    background: #5c1a1a;
+    color: #ff6b6b;
+}
+
+/* Desktop */
+.desktop-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.desktop-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+}
+
+.desktop-toolbar label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #a0a0b0;
+}
+
+.canvas-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #000;
+}
+
+#screen {
+    cursor: crosshair;
+    outline: none;
+}
+
+/* Terminal */
+.terminal-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.terminal-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+}
+
+#terminal {
+    flex: 1;
+    padding: 0.5rem;
+}
+
+/* Files */
+.files-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: auto;
+}
+
+.files-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+}
+
+.files-toolbar input {
+    flex: 1;
+    padding: 0.4rem 0.75rem;
+    background: #1a1a2e;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    color: #e0e0e0;
+}
+
+.files-toolbar button, .files-upload button {
+    padding: 0.4rem 1rem;
+    background: #0f3460;
+    color: #e0e0e0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.files-toolbar button:hover, .files-upload button:hover {
+    background: #1a4a8a;
+}
+
+.files-upload {
+    padding: 0.5rem 1rem;
+}
+
+.drop-zone {
+    border: 2px dashed #0f3460;
+    border-radius: 4px;
+    padding: 1rem;
+    text-align: center;
+    color: #a0a0b0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.drop-zone.dragover {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.file-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.file-table th {
+    text-align: left;
+    padding: 0.5rem 1rem;
+    background: #16213e;
+    color: #a0a0b0;
+    font-weight: 600;
+    border-bottom: 1px solid #0f3460;
+    position: sticky;
+    top: 0;
+}
+
+.file-table td {
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid #0f3460;
+}
+
+.file-table tr:hover {
+    background: rgba(15, 52, 96, 0.3);
+}
+
+.file-table .dir {
+    cursor: pointer;
+    color: #53a8e2;
+}
+
+.file-table .file-actions button {
+    padding: 0.2rem 0.5rem;
+    margin-right: 0.25rem;
+    background: #0f3460;
+    color: #e0e0e0;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.file-table .file-actions button.delete {
+    background: #5c1a1a;
+    color: #ff6b6b;
+}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Terminal - RDC{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="terminal-container">
+    <div class="terminal-toolbar">
+        <span id="term-status" class="status disconnected">Disconnected</span>
+    </div>
+    <div id="terminal"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/addons/xterm-addon-fit.min.js"></script>
+<script src="/static/js/terminal.js"></script>
+{% endblock %}
