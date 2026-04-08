@@ -63,3 +63,9 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Node.js (youtube-mcp-server)
+node_modules/
+youtube-mcp-server/dist/
+*.tsbuildinfo
+npm-debug.log*
