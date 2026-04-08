@@ -80,6 +80,34 @@ class PipelineConfig:
     analytics_lookback_days: int = 28
     analytics_report_dir: str = "reports"
 
+    # Pipeline runtime
+    dry_run: bool = False
+    log_level: str = "INFO"
+    assets_dir: str = "assets"
+
+    # ── Pipeline-expected subdirectories (derived from output_dir) ────────
+    @property
+    def base_dir(self) -> str: return self.output_dir
+    @property
+    def scripts_dir(self) -> str: return str(Path(self.output_dir) / "scripts")
+    @property
+    def audio_dir(self) -> str: return str(Path(self.output_dir) / "audio")
+    @property
+    def thumbnails_dir(self) -> str: return str(Path(self.output_dir) / "thumbnails")
+    @property
+    def videos_dir(self) -> str: return str(Path(self.output_dir) / "videos")
+    @property
+    def logs_dir(self) -> str: return str(Path(self.output_dir) / "logs")
+
+    def ensure_dirs(self) -> None:
+        """Create every directory the pipeline writes to."""
+        for d in (
+            self.output_dir, self.temp_dir, self.analytics_report_dir,
+            self.scripts_dir, self.audio_dir, self.thumbnails_dir,
+            self.videos_dir, self.logs_dir,
+        ):
+            Path(d).mkdir(parents=True, exist_ok=True)
+
     @classmethod
     def from_env(cls) -> "PipelineConfig":
         def _b(v): return str(v).lower() in ("true", "1", "yes")
@@ -124,6 +152,7 @@ class PipelineConfig:
     def save(self, path) -> None:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        # asdict on a dataclass with @property — only fields are serialised
         data = {k: v for k, v in asdict(self).items()}
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
