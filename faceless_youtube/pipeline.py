@@ -259,6 +259,129 @@ class Pipeline:
         return slug[:80]
 
     # ------------------------------------------------------------------
+    # Visual-asset construction (script sections → list[VisualAsset])
+    # ------------------------------------------------------------------
+
+    # Zoom motions cycled across sections for visual variety
+    _ZOOM_CYCLE = ("slow_in", "slow_out", "pan_left", "pan_right", "pan_up", "pan_down")
+
+    def _build_visual_assets(self, script_data: Any, slug: str) -> list:
+        """Turn a script's sections into a list of VisualAsset objects.
+
+        For each section we need one still image plus a duration. When
+        ``config.image_backend == "fal"`` we call ``FalImageClient.generate_scene_image``
+        with the section's ``visual_notes`` (B-roll direction) as the prompt.
+        Any per-section failure (missing lib, missing key, network error)
+        falls back to a solid-color placeholder for that section only, so
+        one bad request never breaks the whole pipeline.
+        """
+        from faceless_youtube.video_assembler import VisualAsset  # lazy
+
+        sections = self._extract_sections(script_data)
+        if not sections:
+            # No structured sections — fall back to a single full-length placeholder
+            placeholder = self._build_placeholder_image(slug, index=0)
+            total_duration = float(self._extract_total_duration(script_data) or 60.0)
+            return [VisualAsset(path=placeholder, duration=total_duration,
+                                transition="fade", zoom="slow_in")]
+
+        use_fal = getattr(self.config, "image_backend", "none") == "fal"
+        fal_client = self._get_fal_client() if use_fal else None
+
+        assets: list = []
+        for idx, section in enumerate(sections):
+            prompt = self._section_prompt(section)
+            duration = float(self._section_duration(section) or 8.0)
+            zoom = self._ZOOM_CYCLE[idx % len(self._ZOOM_CYCLE)]
+
+            image_path: Optional[str] = None
+            if fal_client is not None and prompt:
+                try:
+                    out = str(Path(self.config.assets_dir) / f"{slug}_scene_{idx:02d}.jpeg")
+                    image_path = fal_client.generate_scene_image(prompt, output_path=out)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Scene image %d failed (%s: %s); using placeholder.",
+                        idx, type(exc).__name__, exc,
+                    )
+
+            if not image_path:
+                image_path = self._build_placeholder_image(slug, index=idx)
+
+            assets.append(VisualAsset(
+                path=image_path,
+                duration=duration,
+                transition="fade",
+                zoom=zoom,
+            ))
+
+        logger.info("Built %d visual asset(s) (backend=%s)",
+                    len(assets), getattr(self.config, "image_backend", "none"))
+        return assets
+
+    def _get_fal_client(self):
+        """Instantiate FalImageClient lazily; return None if unavailable."""
+        try:
+            from faceless_youtube.fal_image_client import FalImageClient
+            return FalImageClient(self.config)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("FalImageClient unavailable (%s: %s); using placeholders.",
+                           type(exc).__name__, exc)
+            return None
+
+    @staticmethod
+    def _extract_sections(script_data: Any) -> list:
+        """Return a list of section-like objects from either a dict or VideoScript."""
+        if script_data is None:
+            return []
+        if hasattr(script_data, "sections"):
+            return list(script_data.sections or [])
+        if isinstance(script_data, dict):
+            return list(script_data.get("sections") or [])
+        return []
+
+    @staticmethod
+    def _extract_total_duration(script_data: Any) -> Optional[float]:
+        if hasattr(script_data, "total_duration_seconds"):
+            return script_data.total_duration_seconds
+        if isinstance(script_data, dict):
+            return (script_data.get("estimated_duration_seconds")
+                    or script_data.get("total_duration_seconds"))
+        return None
+
+    @staticmethod
+    def _section_prompt(section: Any) -> str:
+        """Prefer visual_notes (explicit B-roll direction); fall back to narration."""
+        if isinstance(section, dict):
+            return (section.get("visual_notes") or section.get("narration")
+                    or section.get("heading") or "").strip()
+        return (getattr(section, "visual_notes", None)
+                or getattr(section, "narration", None)
+                or getattr(section, "heading", "") or "").strip()
+
+    @staticmethod
+    def _section_duration(section: Any) -> Optional[float]:
+        if isinstance(section, dict):
+            return section.get("duration_seconds") or section.get("duration")
+        return getattr(section, "duration_seconds", None) or getattr(section, "duration", None)
+
+    def _build_placeholder_image(self, slug: str, index: int) -> str:
+        """Render a simple solid-color placeholder JPG for one section."""
+        from PIL import Image  # lazy
+        w, h = 1920, 1080
+        # Gently shift hue per index so consecutive slides aren't identical
+        palette = [
+            (15, 15, 30), (30, 15, 40), (20, 25, 50),
+            (40, 20, 30), (25, 35, 45), (35, 25, 20),
+        ]
+        color = palette[index % len(palette)]
+        out_dir = Path(self.config.assets_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{slug}_placeholder_{index:02d}.jpg"
+        Image.new("RGB", (w, h), color).save(out_path, "JPEG", quality=90)
+        return str(out_path)
+
+    # ------------------------------------------------------------------
     # Core public API
     # ------------------------------------------------------------------
 
@@ -383,11 +506,12 @@ class Pipeline:
             if self.config.dry_run:
                 logger.info("  [dry-run] Assembly skipped → %s", video_path)
             else:
+                visual_assets = self._build_visual_assets(script_data, slug)
+                result["visual_asset_count"] = len(visual_assets)
                 video_path = self._assembler.assemble(
-                    script=script_data["script"],
                     audio_path=audio_path,
+                    visual_assets=visual_assets,
                     output_path=video_path,
-                    title=script_data.get("title", topic),
                 )
             result["video_path"] = video_path
             result["steps"]["assembly"] = "ok"
