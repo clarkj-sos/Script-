@@ -365,6 +365,147 @@ class Pipeline:
             return section.get("duration_seconds") or section.get("duration")
         return getattr(section, "duration_seconds", None) or getattr(section, "duration", None)
 
+    # ------------------------------------------------------------------
+    # Subtitle construction (script → SRT file for burn-in)
+    # ------------------------------------------------------------------
+
+    def _build_subtitles_srt(
+        self,
+        script_data: Any,
+        slug: str,
+        audio_path: Optional[str] = None,
+    ) -> Optional[str]:
+        """Generate an SRT file from the script and return its path.
+
+        Extracts narration text from the script (joining all section
+        narrations), determines the audio duration (via ffprobe on the real
+        audio file if available, else via summed section durations), then
+        delegates time alignment to ``VideoAssembler.generate_subtitles_from_text``
+        and writes the SRT through ``VideoAssembler._write_srt``.
+
+        Returns ``None`` on any failure — subtitle burn-in is purely
+        additive, so the video still assembles without captions if this
+        step fails.
+        """
+        try:
+            from faceless_youtube.video_assembler import VideoAssembler  # lazy
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("VideoAssembler unavailable for subtitles: %s", exc)
+            return None
+
+        text = self._extract_narration_text(script_data)
+        if not text.strip():
+            logger.info("No narration text available; skipping subtitles.")
+            return None
+
+        duration = self._resolve_audio_duration(script_data, audio_path)
+        if not duration or duration <= 0:
+            logger.info("No audio duration available; skipping subtitles.")
+            return None
+
+        try:
+            entries = VideoAssembler.generate_subtitles_from_text(
+                text=text,
+                audio_duration=duration,
+                words_per_chunk=6,
+            )
+            if not entries:
+                return None
+            out_path = str(Path(self.config.logs_dir) / f"{slug}.srt")
+            Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+            VideoAssembler._write_srt(entries, path=out_path)
+            logger.info("Subtitles written: %s (%d cues, %.1fs)",
+                        out_path, len(entries), duration)
+            return out_path
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Subtitle generation failed (%s: %s); skipping burn-in.",
+                           type(exc).__name__, exc)
+            return None
+
+    @staticmethod
+    def _extract_narration_text(script_data: Any) -> str:
+        """Join hook + all section narrations + outro into one string."""
+        parts: list[str] = []
+        if script_data is None:
+            return ""
+
+        # Hook first
+        hook = (getattr(script_data, "hook", None)
+                if not isinstance(script_data, dict)
+                else script_data.get("hook"))
+        if hook:
+            parts.append(str(hook))
+
+        for section in Pipeline._extract_sections(script_data):
+            if isinstance(section, dict):
+                narration = section.get("narration") or ""
+            else:
+                narration = getattr(section, "narration", "") or ""
+            if narration:
+                parts.append(str(narration))
+
+        # Outro / CTA
+        if isinstance(script_data, dict):
+            tail = script_data.get("outro") or script_data.get("call_to_action")
+        else:
+            tail = (getattr(script_data, "outro", None)
+                    or getattr(script_data, "call_to_action", None))
+        if tail:
+            parts.append(str(tail))
+
+        # Fall back to a flat "script" field if sections were empty
+        if not parts and isinstance(script_data, dict) and script_data.get("script"):
+            parts.append(str(script_data["script"]))
+
+        return " ".join(parts).strip()
+
+    @classmethod
+    def _resolve_audio_duration(
+        cls,
+        script_data: Any,
+        audio_path: Optional[str],
+    ) -> Optional[float]:
+        """Prefer ffprobe on the real audio file; fall back to script metadata."""
+        if audio_path and Path(audio_path).exists():
+            probed = cls._probe_audio_duration(audio_path)
+            if probed and probed > 0:
+                return probed
+
+        # Fall back: sum of section durations
+        sections = cls._extract_sections(script_data)
+        total = 0.0
+        for section in sections:
+            dur = cls._section_duration(section)
+            if dur:
+                total += float(dur)
+        if total > 0:
+            return total
+
+        # Last resort: declared total on the script
+        declared = cls._extract_total_duration(script_data)
+        return float(declared) if declared else None
+
+    @staticmethod
+    def _probe_audio_duration(audio_path: str) -> Optional[float]:
+        """Return audio duration in seconds via ffprobe, or None on failure."""
+        import shutil as _shutil
+        import subprocess as _sub
+        if not _shutil.which("ffprobe"):
+            return None
+        try:
+            proc = _sub.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-show_entries", "format=duration",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    audio_path,
+                ],
+                check=True, capture_output=True, text=True, timeout=10,
+            )
+            return float(proc.stdout.strip())
+        except Exception:  # noqa: BLE001
+            return None
+
     def _build_placeholder_image(self, slug: str, index: int) -> str:
         """Render a simple solid-color placeholder JPG for one section."""
         from PIL import Image  # lazy
@@ -508,10 +649,16 @@ class Pipeline:
             else:
                 visual_assets = self._build_visual_assets(script_data, slug)
                 result["visual_asset_count"] = len(visual_assets)
+                subtitles_path = self._build_subtitles_srt(
+                    script_data, slug, audio_path=audio_path,
+                )
+                if subtitles_path:
+                    result["subtitles_path"] = subtitles_path
                 video_path = self._assembler.assemble(
                     audio_path=audio_path,
                     visual_assets=visual_assets,
                     output_path=video_path,
+                    subtitles_path=subtitles_path,
                 )
             result["video_path"] = video_path
             result["steps"]["assembly"] = "ok"
