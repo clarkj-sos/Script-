@@ -31,6 +31,54 @@ NICHE_POWER_WORDS: dict[str, list[str]] = {
 
 DEFAULT_POWER_WORDS = ["shocking", "revealed", "untold", "secret", "must watch", "incredible"]
 
+SHORT_DESCRIPTION_TEMPLATES: dict[str, str] = {
+    "space_science": (
+        "Scientists just revealed shocking new findings about {title} that rewrite "
+        "what we know about the universe. Subscribe for deep-space discoveries every week. "
+        "#Space #NASA #Astronomy #Universe #Science"
+    ),
+    "ancient_history": (
+        "Lost to time for thousands of years, {title} is finally being uncovered and the "
+        "truth is stranger than legend. Subscribe for forgotten history every week. "
+        "#History #Ancient #Archaeology #Mystery #Lost"
+    ),
+    "ocean_mysteries": (
+        "Deep beneath the waves, {title} has remained unseen until now and what scientists "
+        "found is terrifying. Subscribe for ocean mysteries every week. "
+        "#Ocean #DeepSea #Marine #Mysteries #Creatures"
+    ),
+    "true_crime": (
+        "An unsolved case for decades, {title} still haunts investigators and the evidence "
+        "points somewhere chilling. Subscribe for weekly true crime deep dives. "
+        "#TrueCrime #Unsolved #ColdCase #Mystery #Crime"
+    ),
+    "psychology": (
+        "Dark psychology reveals how {title} quietly rewires your mind without you noticing. "
+        "Subscribe for weekly insights into hidden human behavior. "
+        "#Psychology #Mind #Behavior #DarkPsychology #Brain"
+    ),
+    "technology": (
+        "The future just arrived: {title} is quietly reshaping everything from work to war. "
+        "Subscribe for breakthrough tech explained weekly. "
+        "#Technology #AI #Future #Innovation #Tech"
+    ),
+    "mythology": (
+        "Forgotten gods and ancient power: {title} hides a legend most never hear. "
+        "Subscribe for untold myths decoded every week. "
+        "#Mythology #Legend #Myth #Ancient #Untold"
+    ),
+    "nature_wildlife": (
+        "Rarely filmed and rarely survived: {title} is nature at its most extreme. "
+        "Subscribe for wild encounters every week. "
+        "#Nature #Wildlife #Predator #Survival #Wild"
+    ),
+}
+
+DEFAULT_SHORT_DESCRIPTION = (
+    "{title} \u2014 the story most channels will not tell you. Subscribe for weekly deep dives. "
+    "#Documentary #MustWatch #Untold #Revealed #Facts"
+)
+
 
 def _headers(api_key: str) -> dict[str, str]:
     return {
@@ -155,6 +203,10 @@ class SEOOptimizer:
             optimized += "\n".join(link_lines)
 
         return optimized
+
+    def build_short_description(self, title: str, niche: str) -> str:
+        template = SHORT_DESCRIPTION_TEMPLATES.get(niche, DEFAULT_SHORT_DESCRIPTION)
+        return template.format(title=title.strip())
 
     def generate_tags(
         self,
