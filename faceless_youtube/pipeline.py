@@ -18,6 +18,132 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 
+# ---------------------------------------------------------------------------
+# Configuration dataclass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PipelineConfig:
+    """
+    Central configuration object for the entire pipeline.
+
+    All paths are resolved relative to `base_dir` when they are relative.
+    """
+
+    # ---- Directories -------------------------------------------------------
+    base_dir: str = "output"
+    scripts_dir: str = "output/scripts"
+    audio_dir: str = "output/audio"
+    thumbnails_dir: str = "output/thumbnails"
+    videos_dir: str = "output/videos"
+    assets_dir: str = "assets"
+    logs_dir: str = "logs"
+
+    # ---- OpenAI / LLM ------------------------------------------------------
+    openai_api_key: str = ""
+    llm_model: str = "gpt-4o"
+    script_max_tokens: int = 2000
+    script_temperature: float = 0.7
+
+    # ---- TTS ---------------------------------------------------------------
+    tts_provider: str = "openai"          # "openai" | "gtts" | "elevenlabs"
+    tts_voice: str = "alloy"
+    tts_model: str = "tts-1"
+    elevenlabs_api_key: str = ""
+    elevenlabs_voice_id: str = ""
+
+    # ---- Video -------------------------------------------------------------
+    video_resolution: tuple = (1920, 1080)
+    video_fps: int = 30
+    video_codec: str = "libx264"
+    audio_codec: str = "aac"
+    placeholder_color: tuple = (15, 15, 30)   # dark navy default
+    subtitle_font_size: int = 48
+    subtitle_color: str = "white"
+    subtitle_outline_color: str = "black"
+
+    # ---- Thumbnail ---------------------------------------------------------
+    thumbnail_width: int = 1280
+    thumbnail_height: int = 720
+    thumbnail_font: str = ""              # path to TTF; empty = PIL default
+    thumbnail_presets: dict = field(default_factory=dict)
+
+    # ---- SEO ---------------------------------------------------------------
+    default_niche: str = "general"
+    max_tags: int = 15
+    description_max_chars: int = 5000
+
+    # ---- YouTube API -------------------------------------------------------
+    youtube_client_secrets_file: str = "client_secrets.json"
+    youtube_token_file: str = "token.json"
+    youtube_category_id: str = "28"       # Science & Technology
+    youtube_privacy: str = "public"       # "public" | "unlisted" | "private"
+    youtube_made_for_kids: bool = False
+
+    # ---- Scheduling --------------------------------------------------------
+    schedule_file: str = "output/schedule.json"
+    default_upload_times: list = field(
+        default_factory=lambda: ["09:00", "15:00", "20:00"]
+    )
+    timezone: str = "UTC"
+
+    # ---- Analytics ---------------------------------------------------------
+    analytics_file: str = "output/analytics.json"
+    youtube_data_api_key: str = ""
+
+    # ---- Misc --------------------------------------------------------------
+    dry_run: bool = False
+    log_level: str = "INFO"
+
+    # -----------------------------------------------------------------------
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "PipelineConfig":
+        """Build a PipelineConfig from a plain dictionary (e.g. loaded JSON)."""
+        cfg = cls()
+        for key, value in data.items():
+            if hasattr(cfg, key):
+                # Convert lists back to tuples where needed
+                if key in ("video_resolution", "placeholder_color") and isinstance(value, list):
+                    value = tuple(value)
+                setattr(cfg, key, value)
+        return cfg
+
+    @classmethod
+    def from_json(cls, path: str) -> "PipelineConfig":
+        """Load a PipelineConfig from a JSON file."""
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return cls.from_dict(data)
+
+    def to_dict(self) -> dict:
+        """Serialize the config to a JSON-compatible dictionary."""
+        result = {}
+        for key, value in self.__dict__.items():
+            if isinstance(value, tuple):
+                value = list(value)
+            result[key] = value
+        return result
+
+    def save_json(self, path: str) -> None:
+        """Persist the config to a JSON file."""
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(self.to_dict(), fh, indent=2)
+
+    def ensure_dirs(self) -> None:
+        """Create all required output directories."""
+        for attr in (
+            "base_dir", "scripts_dir", "audio_dir",
+            "thumbnails_dir", "videos_dir", "logs_dir",
+        ):
+            Path(getattr(self, attr)).mkdir(parents=True, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Lazy imports of components (keeps startup fast; errors surface at runtime)
+# ---------------------------------------------------------------------------
+
 def _import_component(module_path: str, class_name: str):
     """Dynamically import a component class."""
     import importlib
@@ -25,13 +151,26 @@ def _import_component(module_path: str, class_name: str):
     return getattr(mod, class_name)
 
 
+def _safe_import(module_path: str, class_name: str, fallback=None):
+    """Try to import a component; return fallback stub on ImportError."""
+    try:
+        return _import_component(module_path, class_name)
+    except (ImportError, ModuleNotFoundError) as exc:
+        logger.debug("Could not import %s.%s: %s", module_path, class_name, exc)
+        return fallback
+
+
+# ---------------------------------------------------------------------------
+# Pipeline
+# ---------------------------------------------------------------------------
+
 class Pipeline:
     """
     Orchestrates the full faceless YouTube video production workflow.
 
     Typical usage::
 
-        config = PipelineConfig.from_file("config.json")
+        config = PipelineConfig.from_json("config.json")
         pipeline = Pipeline(config)
         result = pipeline.produce_video("What happens inside a black hole",
                                         niche="space_science",
@@ -39,19 +178,23 @@ class Pipeline:
                                         upload=True)
     """
 
-    def __init__(self, config) -> None:
+    def __init__(self, config: PipelineConfig) -> None:
         self.config = config
-        if hasattr(config, "ensure_directories"):
-            config.ensure_directories()
+        config.ensure_dirs()
 
-        # Set up logging
-        log_level = getattr(config, "log_level", "INFO")
+        # ---- Set up logging ------------------------------------------------
         logging.basicConfig(
-            level=getattr(logging, log_level.upper(), logging.INFO),
+            level=getattr(logging, config.log_level.upper(), logging.INFO),
             format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler(
+                    Path(config.logs_dir) / "pipeline.log", encoding="utf-8"
+                ),
+            ],
         )
 
-        # Initialise all components
+        # ---- Initialise all components -------------------------------------
         self._script_gen = self._init_component(
             "faceless_youtube.script_generator", "ScriptGenerator", config
         )
@@ -70,33 +213,37 @@ class Pipeline:
         self._uploader = self._init_component(
             "faceless_youtube.uploader", "YouTubeUploader", config
         )
-        self.scheduler = self._init_component(
+        self._scheduler = self._init_component(
             "faceless_youtube.scheduler", "ContentScheduler", config
         )
         self._analytics = self._init_component(
             "faceless_youtube.analytics", "AnalyticsTracker", config
         )
 
-        # Internal state
+        # ---- Internal state ------------------------------------------------
         self._last_upload_time: Optional[str] = None
         self._produced_count: int = 0
 
-        dry_run = getattr(config, "dry_run", False)
-        logger.info("Pipeline initialised (dry_run=%s).", dry_run)
+        logger.info("Pipeline initialised (dry_run=%s).", config.dry_run)
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def _init_component(module_path: str, class_name: str, config):
+    def _init_component(module_path: str, class_name: str, config: PipelineConfig):
         """Import and instantiate a pipeline component."""
         try:
             cls = _import_component(module_path, class_name)
             return cls(config)
-        except (ImportError, ModuleNotFoundError) as exc:
+        except (ImportError, ModuleNotFoundError):
             logger.warning(
-                "Component %s not found (%s); a stub will be used.",
-                class_name, exc,
+                "Component %s not found; a stub will be used. "
+                "Run the full install to enable this feature.",
+                class_name,
             )
             return _ComponentStub(class_name)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.error("Failed to initialise %s: %s", class_name, exc)
             return _ComponentStub(class_name)
 
@@ -111,6 +258,10 @@ class Pipeline:
         slug = slug.strip("_")
         return slug[:80]
 
+    # ------------------------------------------------------------------
+    # Core public API
+    # ------------------------------------------------------------------
+
     def produce_video(
         self,
         topic: str,
@@ -119,11 +270,34 @@ class Pipeline:
         upload: bool = False,
         thumbnail_preset: int = 1,
     ) -> dict:
-        """Execute the full production pipeline for a single topic."""
-        niche = niche or getattr(self.config, "default_niche", "general")
+        """
+        Execute the full production pipeline for a single topic.
+
+        Parameters
+        ----------
+        topic:
+            The subject of the video (e.g. "What happens inside a black hole").
+        niche:
+            Content niche used to tailor the script and SEO metadata
+            (e.g. "space_science").  Defaults to ``config.default_niche``.
+        style:
+            Narrative style passed to the script generator.
+            Common values: ``"documentary"``, ``"explainer"``, ``"storytelling"``.
+        upload:
+            When ``True`` (and ``config.dry_run`` is ``False``), upload the
+            finished video and thumbnail to YouTube.
+        thumbnail_preset:
+            Which thumbnail visual preset to use (1-indexed).
+
+        Returns
+        -------
+        dict
+            A result dictionary containing paths to all generated assets and
+            the YouTube video metadata (or a dry-run summary).
+        """
+        niche = niche or self.config.default_niche
         slug = self._slug(topic)
         started_at = self._timestamp()
-        dry_run = getattr(self.config, "dry_run", False)
 
         logger.info("--- Producing video: %r (niche=%s, style=%s) ---", topic, niche, style)
 
@@ -133,157 +307,156 @@ class Pipeline:
             "style": style,
             "slug": slug,
             "started_at": started_at,
-            "dry_run": dry_run,
+            "dry_run": self.config.dry_run,
             "steps": {},
         }
 
         try:
-            # Step 1 - Generate script
-            logger.info("Step 1/6 - Generating script ...")
-            if dry_run:
+            # ----------------------------------------------------------
+            # Step 1 – Generate script
+            # ----------------------------------------------------------
+            logger.info("Step 1/6 – Generating script …")
+            if self.config.dry_run:
                 script_data = {
                     "title": f"[DRY RUN] {topic}",
                     "script": "[dry-run script placeholder]",
-                    "word_count": 0,
+                    "hook": "[hook]",
                     "sections": [],
+                    "call_to_action": "[CTA]",
+                    "word_count": 0,
+                    "estimated_duration_seconds": 0,
                 }
             else:
-                script = self._script_gen.generate_script(topic=topic, style=style)
-                # Convert to dict-like structure
-                if hasattr(script, "to_dict"):
-                    script_data = script.to_dict()
-                    script_data["script"] = " ".join(
-                        [script.hook] + [s.narration for s in script.sections] + [script.outro]
-                    )
-                    script_data["word_count"] = script.word_count()
-                else:
-                    script_data = script
+                script_data = self._script_gen.generate(
+                    topic=topic, niche=niche, style=style
+                )
             result["script"] = script_data
             result["steps"]["script"] = "ok"
             logger.info("Script generated: %d words.", script_data.get("word_count", 0))
 
-            # Step 2 - Generate voiceover (TTS)
-            logger.info("Step 2/6 - Generating voiceover ...")
-            output_dir = getattr(self.config, "output_dir", "output")
-            audio_path = str(Path(output_dir) / "audio" / f"{slug}.mp3")
-            Path(audio_path).parent.mkdir(parents=True, exist_ok=True)
-            if dry_run:
-                logger.info("  [dry-run] TTS skipped -> %s", audio_path)
+            # ----------------------------------------------------------
+            # Step 2 – Generate voiceover (TTS)
+            # ----------------------------------------------------------
+            logger.info("Step 2/6 – Generating voiceover …")
+            audio_path = str(
+                Path(self.config.audio_dir) / f"{slug}.mp3"
+            )
+            if self.config.dry_run:
+                logger.info("  [dry-run] TTS skipped → %s", audio_path)
             else:
                 audio_path = self._tts.synthesize(
-                    text=script_data.get("script", ""),
+                    text=script_data["script"],
                     output_path=audio_path,
                 )
             result["audio_path"] = audio_path
             result["steps"]["tts"] = "ok"
 
-            # Step 3 - Generate thumbnail
-            logger.info("Step 3/6 - Generating thumbnail ...")
-            thumbnail_path = str(Path(output_dir) / "thumbnails" / f"{slug}_thumb.jpg")
-            Path(thumbnail_path).parent.mkdir(parents=True, exist_ok=True)
+            # ----------------------------------------------------------
+            # Step 3 – Generate thumbnail
+            # ----------------------------------------------------------
+            logger.info("Step 3/6 – Generating thumbnail …")
+            thumbnail_path = str(
+                Path(self.config.thumbnails_dir) / f"{slug}_thumb.jpg"
+            )
+            # Derive a short thumbnail text from the title
             thumb_title = script_data.get("title", topic)
-            if dry_run:
-                logger.info("  [dry-run] Thumbnail skipped -> %s", thumbnail_path)
+            if self.config.dry_run:
+                logger.info("  [dry-run] Thumbnail skipped → %s", thumbnail_path)
             else:
                 thumbnail_path = self._thumb_gen.generate(
-                    text=thumb_title,
+                    title=thumb_title,
+                    topic=topic,
+                    niche=niche,
                     preset=thumbnail_preset,
                     output_path=thumbnail_path,
                 )
             result["thumbnail_path"] = thumbnail_path
             result["steps"]["thumbnail"] = "ok"
 
-            # Step 4 - Assemble video (placeholder; requires visual assets)
-            logger.info("Step 4/6 - Assembling video ...")
-            video_path = str(Path(output_dir) / "videos" / f"{slug}.mp4")
-            Path(video_path).parent.mkdir(parents=True, exist_ok=True)
-            if dry_run:
-                logger.info("  [dry-run] Assembly skipped -> %s", video_path)
+            # ----------------------------------------------------------
+            # Step 4 – Assemble video
+            # ----------------------------------------------------------
+            logger.info("Step 4/6 – Assembling video …")
+            video_path = str(
+                Path(self.config.videos_dir) / f"{slug}.mp4"
+            )
+            if self.config.dry_run:
+                logger.info("  [dry-run] Assembly skipped → %s", video_path)
             else:
-                # In a full setup, fetch stock footage here. For now use thumbnail as placeholder.
-                try:
-                    from faceless_youtube.video_assembler import VisualAsset
-                    assets = [VisualAsset(path=thumbnail_path,
-                                          duration=max(5.0, script_data.get("total_duration_seconds", 30) / 1.0))]
-                    video_path = self._assembler.assemble(
-                        audio_path=audio_path,
-                        visual_assets=assets,
-                        output_path=video_path,
-                    )
-                except Exception as exc:
-                    logger.warning("Video assembly skipped: %s", exc)
-                    video_path = None
+                video_path = self._assembler.assemble(
+                    script=script_data["script"],
+                    audio_path=audio_path,
+                    output_path=video_path,
+                    title=script_data.get("title", topic),
+                )
             result["video_path"] = video_path
-            result["steps"]["assembly"] = "ok" if video_path else "skipped"
+            result["steps"]["assembly"] = "ok"
 
-            # Step 5 - SEO optimisation
-            logger.info("Step 5/6 - Optimising metadata ...")
-            if dry_run:
+            # ----------------------------------------------------------
+            # Step 5 – SEO optimisation
+            # ----------------------------------------------------------
+            logger.info("Step 5/6 – Optimising metadata …")
+            if self.config.dry_run:
                 seo_data = {
                     "title": script_data.get("title", topic),
                     "description": "[dry-run description]",
                     "tags": ["dry", "run"],
                 }
             else:
-                try:
-                    seo_data = self._seo.build_full_metadata(
-                        title=script_data.get("title", topic),
-                        description=script_data.get("description", ""),
-                        tags=script_data.get("tags", []),
-                        niche=niche,
-                    )
-                except Exception as exc:
-                    logger.warning("SEO optimisation failed: %s", exc)
-                    seo_data = {
-                        "title": script_data.get("title", topic),
-                        "description": script_data.get("description", ""),
-                        "tags": script_data.get("tags", []),
-                    }
+                seo_data = self._seo.optimize(
+                    topic=topic,
+                    niche=niche,
+                    script=script_data["script"],
+                    title=script_data.get("title", topic),
+                )
             result["seo"] = seo_data
             result["steps"]["seo"] = "ok"
+            logger.info("SEO title: %r", seo_data.get("title"))
 
-            # Step 6 - Optional upload
-            if upload and video_path:
-                logger.info("Step 6/6 - Uploading to YouTube ...")
-                if dry_run:
+            # ----------------------------------------------------------
+            # Step 6 – Optional upload
+            # ----------------------------------------------------------
+            if upload:
+                logger.info("Step 6/6 – Uploading to YouTube …")
+                if self.config.dry_run:
                     upload_result = {
                         "video_id": "DRY_RUN_ID",
                         "url": "https://youtube.com/watch?v=DRY_RUN_ID",
+                        "status": "dry_run",
                     }
                     logger.info("  [dry-run] Upload skipped.")
                 else:
-                    upload_result = self._uploader.upload_video(
-                        file_path=video_path,
-                        title=seo_data.get("optimized_title", seo_data.get("title", topic)),
-                        description=seo_data.get("optimized_description", seo_data.get("description", "")),
-                        tags=seo_data.get("optimized_tags", seo_data.get("tags", [])),
-                        privacy=getattr(self.config, "privacy_status", "private"),
+                    upload_result = self._uploader.upload(
+                        video_path=video_path,
                         thumbnail_path=thumbnail_path,
+                        title=seo_data.get("title", topic),
+                        description=seo_data.get("description", ""),
+                        tags=seo_data.get("tags", []),
                     )
                 result["upload"] = upload_result
                 result["steps"]["upload"] = "ok"
                 self._last_upload_time = self._timestamp()
-                # Record analytics
-                if not dry_run and isinstance(upload_result, dict) and upload_result.get("video_id"):
-                    try:
-                        self._analytics.record_upload(
-                            video_id=upload_result["video_id"],
-                            title=seo_data.get("optimized_title", topic),
-                            topic=topic,
-                            niche=niche,
-                        )
-                    except Exception as exc:
-                        logger.warning("Analytics record failed: %s", exc)
                 logger.info("Uploaded: %s", upload_result.get("url"))
             else:
                 result["steps"]["upload"] = "skipped"
+
+            # ----------------------------------------------------------
+            # Record in analytics tracker
+            # ----------------------------------------------------------
+            if not self.config.dry_run:
+                self._analytics.record_production(
+                    topic=topic,
+                    niche=niche,
+                    video_id=result.get("upload", {}).get("video_id"),
+                    paths=result,
+                )
 
             self._produced_count += 1
             result["finished_at"] = self._timestamp()
             result["success"] = True
             logger.info("Video production complete: %r", topic)
 
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             result["success"] = False
             result["error"] = str(exc)
             result["traceback"] = traceback.format_exc()
@@ -292,18 +465,38 @@ class Pipeline:
 
         return result
 
+    # ------------------------------------------------------------------
+
     def produce_batch(
         self,
-        topics: list,
+        topics: list[str],
         niche: str = None,
         style: str = "documentary",
         upload: bool = False,
-    ) -> list:
-        """Process a list of topics sequentially."""
+    ) -> list[dict]:
+        """
+        Process a list of topics sequentially, returning a result dict for each.
+
+        Parameters
+        ----------
+        topics:
+            Ordered list of topic strings to produce.
+        niche:
+            Shared content niche for all topics.
+        style:
+            Shared narrative style for all topics.
+        upload:
+            Whether to upload each video upon completion.
+
+        Returns
+        -------
+        list[dict]
+            One result dictionary per topic (same format as ``produce_video``).
+        """
         logger.info("Batch production: %d topics (niche=%s).", len(topics), niche)
         results = []
         for index, topic in enumerate(topics, start=1):
-            logger.info("Batch progress: %d/%d - %r", index, len(topics), topic)
+            logger.info("Batch progress: %d/%d – %r", index, len(topics), topic)
             result = self.produce_video(
                 topic=topic, niche=niche, style=style, upload=upload
             )
@@ -315,15 +508,19 @@ class Pipeline:
         )
         return results
 
-    def run_scheduled(self) -> list:
-        """Fetch all due items from the scheduler and produce them."""
-        logger.info("Checking schedule for due items ...")
-        try:
-            due_items = self.scheduler.run_due()
-        except Exception as exc:
-            logger.warning("Scheduler check failed: %s", exc)
-            return []
+    # ------------------------------------------------------------------
 
+    def run_scheduled(self) -> list[dict]:
+        """
+        Fetch all due items from the ContentScheduler and produce them.
+
+        Returns
+        -------
+        list[dict]
+            Result dicts for every item that was due and processed.
+        """
+        logger.info("Checking schedule for due items …")
+        due_items = self._scheduler.get_due_items()
         if not due_items:
             logger.info("No items currently due.")
             return []
@@ -331,13 +528,11 @@ class Pipeline:
         logger.info("%d scheduled item(s) are due.", len(due_items))
         results = []
         for item in due_items:
-            topic = getattr(item, "topic", "Unknown topic")
-            metadata = getattr(item, "metadata", {}) or {}
-            niche = metadata.get("niche", getattr(self.config, "default_niche", "general"))
-            style = metadata.get("style", "documentary")
-            preset = metadata.get("thumbnail_preset", 1)
+            topic = item.get("topic", "Unknown topic")
+            niche = item.get("niche", self.config.default_niche)
+            style = item.get("style", "documentary")
+            preset = item.get("thumbnail_preset", 1)
 
-            self.scheduler.update_status(topic, "generating")
             result = self.produce_video(
                 topic=topic,
                 niche=niche,
@@ -345,18 +540,38 @@ class Pipeline:
                 upload=True,
                 thumbnail_preset=preset,
             )
-            new_status = "published" if result.get("success") else "failed"
-            self.scheduler.update_status(topic, new_status,
-                                          video_path=result.get("video_path"),
-                                          thumbnail_path=result.get("thumbnail_path"))
+            # Mark the scheduled item as processed
+            if result.get("success") and not self.config.dry_run:
+                self._scheduler.mark_complete(item.get("id"))
             results.append(result)
         return results
 
+    # ------------------------------------------------------------------
+
     def run_daily(self) -> dict:
-        """Perform the standard daily automation cycle."""
+        """
+        Perform the standard daily automation cycle:
+          1. Check the schedule for due videos.
+          2. Produce and upload them.
+          3. Refresh analytics for recently uploaded videos.
+          4. Return a summary dictionary.
+
+        Returns
+        -------
+        dict
+            Summary with counts of produced/uploaded videos and any errors.
+        """
         logger.info("=== Daily run started ===")
         started_at = self._timestamp()
         results = self.run_scheduled()
+
+        # Refresh analytics for any video uploaded in the last 48 h
+        refreshed = 0
+        if not self.config.dry_run:
+            try:
+                refreshed = self._analytics.refresh_recent(hours=48)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Analytics refresh failed: %s", exc)
 
         successes = [r for r in results if r.get("success")]
         failures = [r for r in results if not r.get("success")]
@@ -367,6 +582,7 @@ class Pipeline:
             "due_count": len(results),
             "success_count": len(successes),
             "failure_count": len(failures),
+            "analytics_refreshed": refreshed,
             "results": results,
         }
         logger.info(
@@ -376,20 +592,37 @@ class Pipeline:
         )
         return summary
 
+    # ------------------------------------------------------------------
+
     def status(self) -> dict:
-        """Return a snapshot of the current pipeline state."""
+        """
+        Return a snapshot of the current pipeline state.
+
+        Returns
+        -------
+        dict
+            Keys: queue_length, last_upload, next_scheduled, produced_this_session,
+            dry_run, components.
+        """
+        # Queue length from scheduler
         try:
-            queue = self.scheduler.get_schedule()
-            queue_length = len([s for s in queue if s.status == "pending"])
-        except Exception:
+            queue_length = self._scheduler.queue_length()
+        except Exception:  # noqa: BLE001
             queue_length = -1
 
+        # Next scheduled item
         try:
-            next_item = self.scheduler.get_next()
-            next_scheduled = next_item.scheduled_date if next_item else None
-        except Exception:
-            next_scheduled = None
+            next_item = self._scheduler.next_scheduled()
+        except Exception:  # noqa: BLE001
+            next_item = None
 
+        # Analytics summary
+        try:
+            analytics_summary = self._analytics.summary()
+        except Exception:  # noqa: BLE001
+            analytics_summary = {}
+
+        # Component health
         components = {
             name: ("stub" if isinstance(obj, _ComponentStub) else "ok")
             for name, obj in [
@@ -398,25 +631,35 @@ class Pipeline:
                 ("thumbnail_generator", self._thumb_gen),
                 ("video_assembler", self._assembler),
                 ("seo_optimizer", self._seo),
-                ("uploader", self._uploader),
-                ("scheduler", self.scheduler),
-                ("analytics", self._analytics),
+                ("youtube_uploader", self._uploader),
+                ("content_scheduler", self._scheduler),
+                ("analytics_tracker", self._analytics),
             ]
         }
 
         return {
             "queue_length": queue_length,
             "last_upload": self._last_upload_time,
-            "next_scheduled": next_scheduled,
+            "next_scheduled": next_item,
             "produced_this_session": self._produced_count,
-            "dry_run": getattr(self.config, "dry_run", False),
+            "dry_run": self.config.dry_run,
             "components": components,
+            "analytics": analytics_summary,
             "timestamp": self._timestamp(),
         }
 
 
+# ---------------------------------------------------------------------------
+# Stub – used when a component module is not installed
+# ---------------------------------------------------------------------------
+
 class _ComponentStub:
-    """Placeholder for a component that failed to import or initialise."""
+    """
+    Placeholder object returned when a component module cannot be imported.
+
+    Every method call logs a warning and returns a sensible empty value so
+    that the rest of the pipeline can still report status / dry-run safely.
+    """
 
     def __init__(self, name: str) -> None:
         self._name = name
@@ -424,21 +667,35 @@ class _ComponentStub:
     def __getattr__(self, attr: str):
         def _stub(*args, **kwargs):
             logger.warning(
-                "Component '%s' is not installed - call to .%s() is a no-op.",
+                "Component '%s' is not installed – call to .%s() is a no-op.",
                 self._name, attr,
             )
-            if attr in ("generate", "generate_script", "build_full_metadata"):
-                return {"title": "Untitled", "script": "", "sections": [],
-                        "description": "", "tags": [], "word_count": 0}
+            # Return sensible defaults based on expected return types
+            if attr in ("generate", "optimize"):
+                return {
+                    "title": args[0] if args else "Untitled",
+                    "script": "",
+                    "description": "",
+                    "tags": [],
+                    "hook": "",
+                    "sections": [],
+                    "call_to_action": "",
+                    "word_count": 0,
+                    "estimated_duration_seconds": 0,
+                }
             if attr == "synthesize":
                 return kwargs.get("output_path", "")
             if attr == "assemble":
                 return kwargs.get("output_path", "")
-            if attr == "upload_video":
-                return {"video_id": None, "url": None}
-            if attr in ("run_due", "get_schedule"):
+            if attr in ("upload",):
+                return {"video_id": None, "url": None, "status": "stub"}
+            if attr in ("get_due_items",):
                 return []
-            if attr == "get_next":
+            if attr in ("queue_length", "refresh_recent"):
+                return 0
+            if attr in ("next_scheduled",):
                 return None
+            if attr in ("summary",):
+                return {}
             return None
         return _stub
