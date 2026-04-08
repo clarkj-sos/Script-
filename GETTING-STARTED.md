@@ -1,159 +1,121 @@
-# Getting Started with YouTube MCP Server
+# YouTube MCP Server — Setup Guide
 
-This guide will help you get up and running with the Remote Desktop Control Server application.
+The server has been **built and is ready to use**. Follow the steps below to connect it to Claude.
 
-## Prerequisites
+---
 
-Before you begin, ensure you have the following installed:
-- Python 3.9 or higher
-- pip (Python package manager)
-- git
+## Step 1 — Get a Google API Key (read-only access)
 
-## Installation
+1. Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. Create a new project (e.g. "YouTube MCP")
+3. Click **APIs & Services → Enable APIs** and enable **YouTube Data API v3**
+4. Go to **APIs & Services → Credentials → Create Credentials → API Key**
+5. Copy the key — you'll need it below
 
-### 1. Clone the Repository
+---
 
-```bash
-git clone https://github.com/clarkj-sos/Script-.git
-cd Script-
+## Step 2 — Get OAuth2 Credentials (upload, edit & manage videos)
+
+1. In the same Google Cloud project, go to **Credentials → Create Credentials → OAuth client ID**
+2. Choose **Desktop app**, give it a name, and click **Create**
+3. Note your **Client ID** and **Client Secret**
+4. Go to [OAuth Playground](https://developers.google.com/oauthplayground/)
+   - Click the gear icon (⚙️) → check **Use your own OAuth credentials**
+   - Enter your Client ID and Client Secret
+5. In the left panel, find and select the scope:
+   `https://www.googleapis.com/auth/youtube`
+6. Click **Authorize APIs** → sign in with your Google account
+7. Click **Exchange authorization code for tokens**
+8. Copy the **Refresh Token** — you'll need it below
+
+---
+
+## Step 3 — Add the MCP Server to Claude
+
+Open your Claude Desktop config file:
+
+- **Mac**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the following inside `"mcpServers"` (update the path to match where you saved the folder):
+
+```json
+{
+  "mcpServers": {
+    "youtube": {
+      "command": "node",
+      "args": ["PATH_TO_FOLDER/youtube-mcp-server/dist/index.js"],
+      "env": {
+        "YOUTUBE_API_KEY": "your-api-key-here",
+        "YOUTUBE_CLIENT_ID": "your-client-id-here",
+        "YOUTUBE_CLIENT_SECRET": "your-client-secret-here",
+        "YOUTUBE_REFRESH_TOKEN": "your-refresh-token-here"
+      }
+    }
+  }
+}
 ```
 
-### 2. Create a Virtual Environment (Recommended)
+Replace `PATH_TO_FOLDER` with the full path to the parent folder that contains `youtube-mcp-server/` (typically your cloned `Script-` directory).
 
-It's recommended to use a virtual environment to manage dependencies:
+---
+
+## Step 4 — Restart Claude
+
+Quit and reopen Claude Desktop. The YouTube tools will now be available in your conversations.
+
+---
+
+## Building from Source
+
+If `youtube-mcp-server/dist/index.js` does not exist (e.g. fresh clone), build it first:
 
 ```bash
+cd youtube-mcp-server
+npm install
+npm run build
+```
+
+Then continue with Step 3 above.
+
+---
+
+## What You Can Do Once Connected
+
+| Ask | Tool called |
+|-----|-------------|
+| "Upload my new video" | `youtube_upload_video` |
+| "How are my videos performing?" | `youtube_get_video_analytics` |
+| "Update the description on my latest video" | `youtube_update_video` |
+| "Create a playlist called 'Tutorials'" | `youtube_create_playlist` |
+| "What are people saying in my comments?" | `youtube_list_comments` |
+| "Set a thumbnail for my latest video" | `youtube_set_thumbnail` |
+
+---
+
+## Quota Limits (YouTube Data API)
+
+- Default: **10,000 units/day**
+- Searches: 100 units each
+- Uploads: 1,600 units each
+- Read operations: 1 unit each
+
+Request a quota increase in Google Cloud Console if needed.
+
+---
+
+## Legacy: Python Flask Remote Desktop Control App
+
+This repository also contains an unrelated **Python Flask Remote Desktop Control** application (`server.py`, `app/`, `config.py`, `requirements.txt`) that coexists alongside the YouTube MCP server. It is preserved for historical reasons and is not required for the YouTube MCP server to function.
+
+If you need to run the Python app:
+
+```bash
+# From the repository root
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-
-Install all required Python packages:
-
-```bash
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-This will install the following key dependencies:
-- Flask: Web framework
-- Flask-SocketIO: WebSocket support for real-time communication
-- mss: Screen capture library
-- Pillow: Image processing
-- cryptography: TLS certificate generation
-
-## Running the Application
-
-### Starting the Server
-
-To start the Remote Desktop Control Server:
-
-```bash
 python server.py
 ```
 
-The server will:
-1. Generate a self-signed TLS certificate (if one doesn't exist)
-2. Generate a random access password (if not set via environment variable)
-3. Start listening on https://localhost:6100
-
-Example output:
-```
-[*] Generating self-signed TLS certificate...
-[+] Certificate saved to cert.pem
-[+] Key saved to key.pem
-
-[+] Remote Desktop Control Server
-[+] URL: https://localhost:6100
-[+] Password: <generated-password>
-[+] Screen FPS: 30
-[+] JPEG Quality: 85
-```
-
-### Setting a Custom Password
-
-To use a custom password instead of a generated one, set the `RDC_PASSWORD` environment variable:
-
-```bash
-export RDC_PASSWORD="your-secure-password"
-python server.py
-```
-
-## Configuration
-
-You can customize the server behavior by editing `config.py`:
-
-- **HOST**: Server host address (default: localhost)
-- **PORT**: Server port (default: 6100)
-- **SCREEN_FPS**: Screen capture frames per second (default: 30)
-- **JPEG_QUALITY**: JPEG compression quality 1-100 (default: 85)
-- **CERT_FILE**: Path to TLS certificate (default: cert.pem)
-- **KEY_FILE**: Path to TLS key (default: key.pem)
-- **UPLOAD_DIR**: Directory for uploaded files (default: uploads)
-
-## Testing
-
-The project includes tests that run via pytest. To run tests:
-
-```bash
-python -m pytest
-```
-
-You can also run linting checks:
-
-```bash
-python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-```
-
-## Project Structure
-
-```
-Script-/
-├── server.py              # Main application entry point
-├── config.py              # Configuration settings
-├── requirements.txt       # Python dependencies
-├── app/                   # Main application package
-│   ├── __init__.py        # App factory
-│   ├── auth.py            # Authentication module
-│   ├── routes/            # Route handlers
-│   ├── services/          # Business logic services
-│   ├── sockets/           # WebSocket handlers
-│   ├── static/            # CSS and JavaScript files
-│   └── templates/         # HTML templates
-├── .github/
-│   └── workflows/         # GitHub Actions CI/CD
-└── GETTING-STARTED.md     # This file
-```
-
-## Troubleshooting
-
-### ImportError for dependencies
-Make sure you've activated the virtual environment and installed requirements:
-```bash
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### Certificate generation errors
-The application automatically generates a self-signed certificate on first run. If you encounter permission errors, ensure you have write access to the repository directory.
-
-### Connection refused
-Make sure the server is running and listening on the correct host and port (default: https://localhost:6100).
-
-## Development
-
-To contribute to the project:
-
-1. Create a new branch for your feature
-2. Make your changes and test thoroughly
-3. Ensure all tests pass: `python -m pytest`
-4. Ensure code passes linting: `python -m flake8`
-5. Submit a pull request
-
-## License
-
-See the LICENSE file for details.
-
-## Support
-
-For issues and questions, please create an issue on the GitHub repository.
+The server starts at `https://localhost:6100` with a randomly generated password printed to the console (or use the `RDC_PASSWORD` environment variable to set your own).
