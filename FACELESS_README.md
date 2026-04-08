@@ -10,6 +10,7 @@ faceless_youtube/
 ├── config.py                PipelineConfig dataclass (env + JSON)
 ├── script_generator.py      OpenAI gpt-4o script generation (structured JSON)
 ├── thumbnail_generator.py   PIL-based thumbnails (6 Stride presets)
+├── fal_image_client.py      Optional fal.ai nano-banana-2 wrapper
 ├── tts_engine.py            ElevenLabs / edge-tts / gTTS
 ├── video_assembler.py       FFmpeg slideshow + Ken Burns + subtitles + music
 ├── seo_optimizer.py         Title/description/tags optimization
@@ -22,6 +23,30 @@ faceless_youtube/
 run_pipeline.py              CLI entry point
 faceless_requirements.txt    Python dependencies
 ```
+
+## Optional: AI-generated thumbnail backgrounds (nano-banana-2)
+
+The thumbnail generator can call [fal.ai](https://fal.ai)'s `fal-ai/nano-banana-2`
+(Google Gemini image gen) to produce a cinematic background per thumbnail,
+on top of which the 6 Stride presets overlay their typography. If the key is
+missing, the library is not installed, or the request fails, it **silently
+falls back** to the solid-color preset background — thumbnails always render.
+
+```bash
+pip install fal-client                  # optional dep
+export FAL_KEY="your-fal-api-key"
+export IMAGE_BACKEND=fal                # enable globally
+# or per-command:
+python run_pipeline.py thumbnail --text "BLACK HOLE WARNING" --image-backend fal
+```
+
+Config equivalents:
+
+| env var         | config field    | default                 |
+|-----------------|-----------------|-------------------------|
+| `FAL_KEY`       | `fal_api_key`   | `None`                  |
+| `IMAGE_BACKEND` | `image_backend` | `"none"` (solid colors) |
+| `IMAGE_MODEL`   | `image_model`   | `"fal-ai/nano-banana-2"`|
 
 ## Six Thumbnail Presets (from the Stride doc)
 

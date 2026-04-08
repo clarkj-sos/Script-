@@ -16,6 +16,7 @@ _LAZY = {
     "ScriptSection":     ("faceless_youtube.script_generator",   "ScriptSection"),
     "ThumbnailGenerator":("faceless_youtube.thumbnail_generator","ThumbnailGenerator"),
     "ThumbnailPreset":   ("faceless_youtube.thumbnail_generator","ThumbnailPreset"),
+    "FalImageClient":    ("faceless_youtube.fal_image_client",   "FalImageClient"),
     "TTSEngine":         ("faceless_youtube.tts_engine",         "TTSEngine"),
     "VideoAssembler":    ("faceless_youtube.video_assembler",    "VideoAssembler"),
     "VisualAsset":       ("faceless_youtube.video_assembler",    "VisualAsset"),
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
     from faceless_youtube.config import PipelineConfig
     from faceless_youtube.script_generator import ScriptGenerator, VideoScript, ScriptSection
     from faceless_youtube.thumbnail_generator import ThumbnailGenerator, ThumbnailPreset
+    from faceless_youtube.fal_image_client import FalImageClient
     from faceless_youtube.tts_engine import TTSEngine
     from faceless_youtube.video_assembler import VideoAssembler, VisualAsset, SubtitleEntry
     from faceless_youtube.seo_optimizer import SEOOptimizer

@@ -1,11 +1,14 @@
 """Thumbnail generator with 6 design presets from the Stride document."""
 from __future__ import annotations
+import logging
 import os, uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageEnhance
+
+logger = logging.getLogger(__name__)
 
 
 # Presets
@@ -100,6 +103,13 @@ class ThumbnailGenerator:
         p = self._resolve_preset(preset)
         output_path = output_path or self._default_output(p.name)
 
+        # If no explicit background was supplied and the config opts in to the
+        # fal.ai image backend, try to generate one via nano-banana-2. Any
+        # failure (missing lib, missing key, network error) falls back silently
+        # to the solid-color preset background so thumbnails always render.
+        if background_image is None and getattr(self.config, "image_backend", "none") == "fal":
+            background_image = self._try_generate_ai_background(text, p)
+
         # Background
         if background_image and os.path.exists(background_image):
             img = Image.open(background_image).convert("RGB")
@@ -129,6 +139,27 @@ class ThumbnailGenerator:
         return results
 
     # Helpers
+
+    def _try_generate_ai_background(self, text: str, preset: ThumbnailPreset) -> Optional[str]:
+        """Generate an AI background via fal.ai, or return None on any failure."""
+        try:
+            from faceless_youtube.fal_image_client import FalImageClient
+            client = FalImageClient(self.config)
+            out_path = os.path.join(
+                self.output_dir,
+                f"thumb_bg_{preset.name}_{uuid.uuid4().hex[:8]}.jpeg",
+            )
+            return client.generate_thumbnail_background(
+                title=text,
+                style_notes=preset.style_notes,
+                output_path=out_path,
+            )
+        except Exception as exc:
+            logger.warning(
+                "AI background generation failed (%s: %s), falling back to solid color.",
+                type(exc).__name__, exc,
+            )
+            return None
 
     def _resolve_preset(self, preset: Union[str, int]) -> ThumbnailPreset:
         if isinstance(preset, int):

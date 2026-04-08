@@ -20,6 +20,11 @@ class PipelineConfig:
     # TTS backend selection: "elevenlabs" | "edge-tts" | "gtts"
     tts_backend: str = "edge-tts"
 
+    # fal.ai image generation (nano-banana-2)
+    fal_api_key: Optional[str] = None
+    image_backend: str = "none"  # "none" | "fal"
+    image_model: str = "fal-ai/nano-banana-2"
+
     # YouTube
     youtube_api_key: Optional[str] = None
     youtube_client_id: Optional[str] = None
@@ -121,6 +126,9 @@ class PipelineConfig:
             elevenlabs_api_key=os.getenv("ELEVENLABS_API_KEY"),
             elevenlabs_voice_id=os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
             tts_backend=os.getenv("TTS_BACKEND", "edge-tts"),
+            fal_api_key=os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY"),
+            image_backend=os.getenv("IMAGE_BACKEND", "none"),
+            image_model=os.getenv("IMAGE_MODEL", "fal-ai/nano-banana-2"),
             youtube_api_key=os.getenv("YOUTUBE_API_KEY"),
             youtube_client_id=os.getenv("YOUTUBE_CLIENT_ID"),
             youtube_client_secret=os.getenv("YOUTUBE_CLIENT_SECRET"),

@@ -90,6 +90,8 @@ def cmd_batch(args):
 def cmd_thumbnail(args):
     from faceless_youtube import ThumbnailGenerator
     cfg = load_config(args.config)
+    if args.image_backend:
+        cfg.image_backend = args.image_backend
     gen = ThumbnailGenerator(cfg)
     if args.all:
         paths = gen.generate_all_presets(args.text, output_dir=args.output)
@@ -212,7 +214,9 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--text", required=True)
     t.add_argument("--preset", type=int, default=1, choices=[1, 2, 3, 4, 5, 6])
     t.add_argument("--output")
-    t.add_argument("--background")
+    t.add_argument("--background", help="Path to a local background image")
+    t.add_argument("--image-backend", choices=["none", "fal"],
+                   help="Override config.image_backend (fal = nano-banana-2 via fal.ai)")
     t.add_argument("--all", action="store_true", help="Generate all 6 presets")
     t.set_defaults(func=cmd_thumbnail)
 
