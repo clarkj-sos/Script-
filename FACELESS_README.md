@@ -48,6 +48,23 @@ Config equivalents:
 | `IMAGE_BACKEND` | `image_backend` | `"none"` (solid colors) |
 | `IMAGE_MODEL`   | `image_model`   | `"fal-ai/nano-banana-2"`|
 
+## Optional: music, intro, outro, subtitle styling
+
+Every stage below is **optional** — if the referenced file is missing the
+pipeline logs a warning and skips that stage, so the video still renders.
+
+| env var           | config field      | default        | notes |
+|-------------------|-------------------|----------------|-------|
+| `MUSIC_PATH`      | `music_path`      | `None`         | Background audio file mixed under narration |
+| `MUSIC_VOLUME`    | `music_volume`    | `0.1`          | 0.0–1.0, relative to narration |
+| `INTRO_PATH`      | `intro_path`      | `None`         | Video file prepended via concat |
+| `OUTRO_PATH`      | `outro_path`      | `None`         | Video file appended; takes precedence over `OUTRO_TEXT` |
+| `OUTRO_TEXT`      | `outro_text`      | `"Subscribe!"` | Used when `OUTRO_PATH` is not set |
+| `OUTRO_DURATION`  | `outro_duration`  | `5.0`          | Seconds for the text-based outro |
+| `SUBTITLE_STYLE`  | `subtitle_style`  | `"modern"`     | `"modern"` (white) or `"highlight"` (yellow bold) |
+
+Post-assembly chain order: `assemble → music → intro → outro`.
+
 ## Six Thumbnail Presets (from the Stride doc)
 
 1. **BLACK HOLE WARNING** — high urgency, orange/black, Anton font

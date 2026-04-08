@@ -25,6 +25,15 @@ class PipelineConfig:
     image_backend: str = "none"  # "none" | "fal"
     image_model: str = "fal-ai/nano-banana-2"
 
+    # Video extras (music, intro, outro, subtitle styling)
+    music_path: Optional[str] = None
+    music_volume: float = 0.1
+    intro_path: Optional[str] = None  # video file to prepend
+    outro_path: Optional[str] = None  # video file to append (takes precedence over outro_text)
+    outro_text: str = "Subscribe!"    # used when outro_path is not set
+    outro_duration: float = 5.0       # duration of the text-based outro in seconds
+    subtitle_style: str = "modern"    # "modern" | "highlight"
+
     # YouTube
     youtube_api_key: Optional[str] = None
     youtube_client_id: Optional[str] = None
@@ -129,6 +138,13 @@ class PipelineConfig:
             fal_api_key=os.getenv("FAL_KEY") or os.getenv("FAL_API_KEY"),
             image_backend=os.getenv("IMAGE_BACKEND", "none"),
             image_model=os.getenv("IMAGE_MODEL", "fal-ai/nano-banana-2"),
+            music_path=os.getenv("MUSIC_PATH"),
+            music_volume=float(os.getenv("MUSIC_VOLUME", "0.1")),
+            intro_path=os.getenv("INTRO_PATH"),
+            outro_path=os.getenv("OUTRO_PATH"),
+            outro_text=os.getenv("OUTRO_TEXT", "Subscribe!"),
+            outro_duration=float(os.getenv("OUTRO_DURATION", "5.0")),
+            subtitle_style=os.getenv("SUBTITLE_STYLE", "modern"),
             youtube_api_key=os.getenv("YOUTUBE_API_KEY"),
             youtube_client_id=os.getenv("YOUTUBE_CLIENT_ID"),
             youtube_client_secret=os.getenv("YOUTUBE_CLIENT_SECRET"),

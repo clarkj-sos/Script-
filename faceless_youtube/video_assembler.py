@@ -76,6 +76,7 @@ class VideoAssembler:
         visual_assets: list,
         output_path: str | None = None,
         subtitles_path: str | None = None,
+        subtitle_style: str = "modern",
     ) -> str:
         output_path = output_path or self._default_output("assembled")
         images = [a.path for a in visual_assets]
@@ -102,7 +103,7 @@ class VideoAssembler:
                 video_path=with_audio,
                 subtitles_path=subtitles_path,
                 output_path=output_path,
-                style="modern",
+                style=subtitle_style,
             )
             self._run_ffmpeg(cmd)
         else:

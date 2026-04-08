@@ -259,6 +259,107 @@ class Pipeline:
         return slug[:80]
 
     # ------------------------------------------------------------------
+    # Post-assembly chain (music, intro, outro)
+    # ------------------------------------------------------------------
+
+    def _apply_post_assembly_chain(self, video_path: str, result: dict) -> str:
+        """Apply optional music, intro, and outro passes to the assembled video.
+
+        Each stage is skipped silently if the relevant config path is empty
+        or the referenced file does not exist. Any ffmpeg failure within a
+        stage logs a warning and leaves the video unchanged so the pipeline
+        still returns a playable file.
+        """
+        current = video_path
+
+        music_path = getattr(self.config, "music_path", None)
+        if music_path and Path(music_path).exists():
+            try:
+                out = self._derived_path(video_path, "with_music")
+                current = self._assembler.add_background_music(
+                    video_path=current,
+                    music_path=music_path,
+                    volume=float(getattr(self.config, "music_volume", 0.1)),
+                    output_path=out,
+                )
+                result["music_applied"] = True
+                logger.info("Background music applied.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Music pass failed (%s: %s); skipping.",
+                               type(exc).__name__, exc)
+        elif music_path:
+            logger.warning("music_path set but file missing: %s", music_path)
+
+        intro_path = getattr(self.config, "intro_path", None)
+        if intro_path and Path(intro_path).exists():
+            try:
+                out = self._derived_path(video_path, "with_intro")
+                current = self._assembler.add_intro(
+                    video_path=current,
+                    intro_path=intro_path,
+                    output_path=out,
+                )
+                result["intro_applied"] = True
+                logger.info("Intro added.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Intro pass failed (%s: %s); skipping.",
+                               type(exc).__name__, exc)
+        elif intro_path:
+            logger.warning("intro_path set but file missing: %s", intro_path)
+
+        outro_path = getattr(self.config, "outro_path", None)
+        outro_text = getattr(self.config, "outro_text", None)
+        outro_duration = float(getattr(self.config, "outro_duration", 5.0))
+        if outro_path and Path(outro_path).exists():
+            try:
+                out = self._derived_path(video_path, "with_outro")
+                current = self._assembler.concatenate_videos(
+                    [current, outro_path],
+                    output_path=out,
+                )
+                result["outro_applied"] = "video"
+                logger.info("Outro video appended.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Outro video pass failed (%s: %s); skipping.",
+                               type(exc).__name__, exc)
+        elif outro_path:
+            logger.warning("outro_path set but file missing: %s", outro_path)
+        elif outro_text and outro_duration > 0:
+            try:
+                out = self._derived_path(video_path, "with_outro")
+                current = self._assembler.add_outro(
+                    video_path=current,
+                    outro_duration=outro_duration,
+                    text=outro_text,
+                    output_path=out,
+                )
+                result["outro_applied"] = "text"
+                logger.info("Text outro appended.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Text outro pass failed (%s: %s); skipping.",
+                               type(exc).__name__, exc)
+
+        # If any stage changed the path, move the final result back to the
+        # canonical video_path so downstream steps see a stable name.
+        if current != video_path:
+            import shutil as _sh
+            try:
+                _sh.move(current, video_path)
+                logger.info("Final video consolidated at %s", video_path)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Could not move final video to %s (%s); "
+                               "returning intermediate path %s",
+                               video_path, exc, current)
+                return current
+        return video_path
+
+    @staticmethod
+    def _derived_path(base_path: str, suffix: str) -> str:
+        """Build a sibling path like 'foo.mp4' -> 'foo_with_music.mp4'."""
+        p = Path(base_path)
+        return str(p.with_name(f"{p.stem}_{suffix}{p.suffix}"))
+
+    # ------------------------------------------------------------------
     # Visual-asset construction (script sections → list[VisualAsset])
     # ------------------------------------------------------------------
 
@@ -659,7 +760,12 @@ class Pipeline:
                     visual_assets=visual_assets,
                     output_path=video_path,
                     subtitles_path=subtitles_path,
+                    subtitle_style=getattr(self.config, "subtitle_style", "modern"),
                 )
+                # Post-assembly chain: music → intro → outro. Each stage is
+                # optional and silently skipped if the config path is missing
+                # or the file does not exist.
+                video_path = self._apply_post_assembly_chain(video_path, result)
             result["video_path"] = video_path
             result["steps"]["assembly"] = "ok"
 
