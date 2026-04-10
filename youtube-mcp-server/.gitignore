@@ -1,0 +1,4 @@
+node_modules/
+dist/
+youtube-credentials.json
+*.tgz
