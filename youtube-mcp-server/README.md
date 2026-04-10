@@ -2,20 +2,6 @@
 
 An MCP (Model Context Protocol) server that connects Claude (or any MCP client) to the YouTube Data API v3. Upload videos, manage metadata, pull analytics, handle playlists, and moderate comments — all through natural language.
 
-> New here? See [GETTING-STARTED.md](./GETTING-STARTED.md) for the step-by-step setup walkthrough.
-
-## Repository Layout
-
-```
-Script-/
-├── youtube-mcp-server/        # The MCP server (this README documents this)
-│   ├── src/
-│   ├── package.json
-│   └── tsconfig.json
-├── server.py, app/, config.py # Legacy Python Flask app (unrelated)
-└── GETTING-STARTED.md         # YouTube MCP setup walkthrough
-```
-
 ## Tools
 
 | Tool | Description | Auth |

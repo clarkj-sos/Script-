@@ -26,6 +26,7 @@ import {
   DeleteVideoSchema,
   SetThumbnailSchema,
 } from "../schemas/youtube-schemas.js";
+import type { youtube_v3 } from "googleapis";
 import type {
   YouTubeVideo,
   YouTubeChannel,
@@ -279,7 +280,7 @@ Returns: Channel name, description, subscriber/view/video counts, custom URL, cr
         else if (params.for_username) query.forUsername = params.for_username;
         else query.mine = true;
 
-        const res = await yt.channels.list(query as Parameters<typeof yt.channels.list>[0]);
+        const res = await yt.channels.list(query as youtube_v3.Params$Resource$Channels$List);
         const ch = res.data.items?.[0] as YouTubeChannel | undefined;
         if (!ch) {
           return { content: [{ type: "text" as const, text: "Channel not found." }] };
@@ -364,7 +365,7 @@ Returns: List of videos with titles, IDs, publish dates, and thumbnails.`,
         if (params.channel_id) chQuery.id = [params.channel_id];
         else chQuery.mine = true;
 
-        const chRes = await yt.channels.list(chQuery as Parameters<typeof yt.channels.list>[0]);
+        const chRes = await yt.channels.list(chQuery as youtube_v3.Params$Resource$Channels$List);
         const uploadsPlaylist =
           chRes.data.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
 
@@ -565,7 +566,7 @@ Returns: Updated video details.`,
 
         const res = await yt.videos.update({
           part: ["snippet", "status"],
-          requestBody: updateBody as Parameters<typeof yt.videos.update>[0]["requestBody"],
+          requestBody: updateBody as youtube_v3.Params$Resource$Videos$Update["requestBody"],
         });
 
         const updated = res.data;
@@ -723,7 +724,7 @@ Returns: List of playlists with titles, IDs, item counts, and privacy status.`,
         if (params.channel_id) query.channelId = params.channel_id;
         else query.mine = true;
 
-        const res = await yt.playlists.list(query as Parameters<typeof yt.playlists.list>[0]);
+        const res = await yt.playlists.list(query as youtube_v3.Params$Resource$Playlists$List);
         const items = (res.data.items || []) as YouTubePlaylist[];
 
         const output = {
@@ -854,7 +855,7 @@ Returns: Confirmation with playlist item ID.`,
 
         const res = await yt.playlistItems.insert({
           part: ["snippet"],
-          requestBody: body as Parameters<typeof yt.playlistItems.insert>[0]["requestBody"],
+          requestBody: body as youtube_v3.Params$Resource$Playlistitems$Insert["requestBody"],
         });
 
         const output = {

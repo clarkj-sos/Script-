@@ -1,6 +1,6 @@
 # Getting Started: YouTube MCP Server for Your Faceless Channel
 
-A step-by-step guide to setting up and using the YouTube MCP Server to manage your faceless YouTube channel entirely through Claude.
+A step-by-step guide to setting up and using the YouTube MCP Server to manage your YouTube channel through Claude.
 
 ---
 
@@ -10,19 +10,19 @@ A step-by-step guide to setting up and using the YouTube MCP Server to manage yo
 2. [Step 1: Set Up a Google Cloud Project](#step-1-set-up-a-google-cloud-project)
 3. [Step 2: Get Your API Key (Read-Only Access)](#step-2-get-your-api-key-read-only-access)
 4. [Step 3: Get OAuth2 Credentials (Full Access)](#step-3-get-oauth2-credentials-full-access)
-5. [Step 4: Install and Build the Server](#step-4-install-and-build-the-server)
-6. [Step 5: Configure Environment Variables](#step-5-configure-environment-variables)
-7. [Step 6: Connect to Claude](#step-6-connect-to-claude)
-8. [Step 7: Start Managing Your Channel](#step-7-start-managing-your-channel)
-9. [Faceless Channel Workflows](#faceless-channel-workflows)
-10. [Quota Management](#quota-management)
-11. [Troubleshooting](#troubleshooting)
+5. [Step 4: Build the Server](#step-4-build-the-server)
+6. [Step 5: Connect to Claude](#step-5-connect-to-claude)
+7. [Step 6: Start Managing Your Channel](#step-6-start-managing-your-channel)
+8. [Faceless Channel Workflows](#faceless-channel-workflows)
+9. [Quota Management](#quota-management)
+10. [Troubleshooting](#troubleshooting)
+11. [Legacy: Python Flask Remote Desktop Control App](#legacy-python-flask-remote-desktop-control-app)
 
 ---
 
 ## What You'll Need
 
-- **Python 3.9+** and **pip**
+- **Node.js 18+** and **npm** (the MCP server is a TypeScript/Node.js project)
 - A **Google account** with a YouTube channel
 - **Claude Desktop**, **Claude Code**, or another MCP-compatible client
 - Basic comfort with the terminal
@@ -82,68 +82,53 @@ Use the [Google OAuth Playground](https://developers.google.com/oauthplayground/
 
 ---
 
-## Step 4: Install and Build the Server
+## Step 4: Build the Server
 
 ```bash
 # Clone the repository
 git clone https://github.com/clarkj-sos/Script-.git
-cd Script-
-
-# Create a virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
+cd Script-/youtube-mcp-server
 
 # Install dependencies
-pip install -r requirements.txt
+npm install
+
+# Build the TypeScript source to dist/
+npm run build
 ```
+
+After this completes, `youtube-mcp-server/dist/index.js` will exist and is what Claude will run.
 
 ---
 
-## Step 5: Configure Environment Variables
-
-Create a `.env` file or export the variables in your shell:
-
-```bash
-# Required: Read-only access
-export YOUTUBE_API_KEY="your-api-key-here"
-
-# Required for uploads, updates, and channel management
-export YOUTUBE_CLIENT_ID="your-client-id-here"
-export YOUTUBE_CLIENT_SECRET="your-client-secret-here"
-export YOUTUBE_REFRESH_TOKEN="your-refresh-token-here"
-
-# Optional: Transport mode (default: stdio)
-export TRANSPORT="stdio"    # Use "http" for remote/multi-client access
-export PORT="3000"           # Only used with HTTP transport
-```
-
----
-
-## Step 6: Connect to Claude
+## Step 5: Connect to Claude
 
 ### Option A: Claude Desktop
 
-Add the server to your `claude_desktop_config.json`:
+Open your Claude Desktop config file:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the following inside `"mcpServers"`:
 
 ```json
 {
   "mcpServers": {
     "youtube": {
-      "command": "python3",
-      "args": ["/absolute/path/to/Script-/server.py"],
+      "command": "node",
+      "args": ["PATH_TO_FOLDER/youtube-mcp-server/dist/index.js"],
       "env": {
-        "YOUTUBE_API_KEY": "your-api-key",
-        "YOUTUBE_CLIENT_ID": "your-client-id",
-        "YOUTUBE_CLIENT_SECRET": "your-client-secret",
-        "YOUTUBE_REFRESH_TOKEN": "your-refresh-token"
+        "YOUTUBE_API_KEY": "your-api-key-here",
+        "YOUTUBE_CLIENT_ID": "your-client-id-here",
+        "YOUTUBE_CLIENT_SECRET": "your-client-secret-here",
+        "YOUTUBE_REFRESH_TOKEN": "your-refresh-token-here"
       }
     }
   }
 }
 ```
+
+Replace `PATH_TO_FOLDER` with the full path to the parent folder that contains `youtube-mcp-server/` (typically your cloned `Script-` directory).
 
 Restart Claude Desktop after saving.
 
@@ -152,21 +137,29 @@ Restart Claude Desktop after saving.
 Add the MCP server via the CLI:
 
 ```bash
-claude mcp add youtube -- python3 /absolute/path/to/Script-/server.py
+claude mcp add youtube -- node /absolute/path/to/Script-/youtube-mcp-server/dist/index.js
 ```
 
-Then set the environment variables in your shell before launching Claude Code.
+Then set the environment variables in your shell before launching Claude Code:
+
+```bash
+export YOUTUBE_API_KEY="your-api-key"
+export YOUTUBE_CLIENT_ID="your-client-id"
+export YOUTUBE_CLIENT_SECRET="your-client-secret"
+export YOUTUBE_REFRESH_TOKEN="your-refresh-token"
+```
 
 ### Option C: HTTP Transport (Remote Access)
 
 ```bash
-TRANSPORT=http RDC_PORT=3000 python3 server.py
-# Server runs at https://0.0.0.0:3000
+cd youtube-mcp-server
+TRANSPORT=http PORT=3000 node dist/index.js
+# Server runs at http://localhost:3000/mcp
 ```
 
 ---
 
-## Step 7: Start Managing Your Channel
+## Step 6: Start Managing Your Channel
 
 Once connected, you can talk to Claude naturally. Here are some things to try:
 
@@ -261,12 +254,13 @@ You've hit the 10,000 unit daily limit. Wait until midnight Pacific Time for the
 - If using OAuth, confirm your account is listed as a test user in the OAuth consent screen
 
 ### Server won't start
-- Ensure Python 3.9+ is installed: `python3 --version`
-- Run `pip install -r requirements.txt` again
+- Ensure Node.js 18+ is installed: `node --version`
+- Re-run `npm install` and `npm run build` from the `youtube-mcp-server/` directory
+- Confirm `youtube-mcp-server/dist/index.js` exists
 - Check that all required environment variables are set
 
 ### Claude doesn't see the YouTube tools
-- Verify the path in your MCP configuration is correct
+- Verify the path in your MCP configuration points to `youtube-mcp-server/dist/index.js`
 - Restart Claude Desktop or Claude Code after changing the config
 - Check the server logs for startup errors
 
@@ -280,3 +274,21 @@ You've hit the 10,000 unit daily limit. Wait until midnight Pacific Time for the
 - Consider setting up HTTP transport if you want to access the server from multiple devices
 
 Happy creating!
+
+---
+
+## Legacy: Python Flask Remote Desktop Control App
+
+This repository also contains an unrelated **Python Flask Remote Desktop Control** application (`server.py`, `app/`, `config.py`, `requirements.txt`) that coexists alongside the YouTube MCP server. It is preserved for historical reasons and is not required for the YouTube MCP server to function. The repository also contains a separate `faceless_youtube/` Python module for content automation — see its own README for details.
+
+If you need to run the Python Flask app:
+
+```bash
+# From the repository root
+python3 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python server.py
+```
+
+The server starts at `https://localhost:6100` with a randomly generated password printed to the console (or use the `RDC_PASSWORD` environment variable to set your own).

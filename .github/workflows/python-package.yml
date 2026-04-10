@@ -32,9 +32,19 @@ jobs:
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exclude=youtube-mcp-server,node_modules
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics --exclude=youtube-mcp-server,node_modules
     - name: Test with pytest
       run: |
+        # Exit code 5 from pytest means "no tests collected". The repo
+        # currently has no Python test suite (the YouTube MCP server is
+        # tested via the Node workflow, and the Flask app has no tests
+        # yet), so treat exit 5 as success.
+        set +e
         pytest
+        rc=$?
+        if [ "$rc" -eq 0 ] || [ "$rc" -eq 5 ]; then
+          exit 0
+        fi
+        exit "$rc"
